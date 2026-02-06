@@ -2,30 +2,28 @@
 """
 HOLLOWMERE - A Story-Driven Horror RPG
 =======================================
-Run with: python3 main.py
+Run with: python main.py
+No external dependencies needed.
 """
 import sys
 import os
 import time
-from colorama import Fore, Style, init
 
 # Ensure the game package is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from engine.display import Display
+from engine.display import Display, _GRAY, _RED, _RESET
 from engine.game_state import GameState
 from scenes import character_creation
 from scenes import act1_ch1_arrival
 from scenes import act1_ch2_cracks
 from scenes import act1_ch3_missing
 
-init(autoreset=True)
-
 
 def intro(display):
     display.clear()
     time.sleep(1)
-    display.type_text("  ...", Fore.LIGHTBLACK_EX, 0.3)
+    display.type_text("  ...", _GRAY, 0.3)
     time.sleep(2)
     display.clear()
     time.sleep(1)
@@ -47,12 +45,12 @@ def intro(display):
             display.blank()
             time.sleep(0.5)
         else:
-            display.type_text(f"  {line}", Fore.LIGHTBLACK_EX, 0.04)
+            display.type_text(f"  {line}", _GRAY, 0.04)
             time.sleep(0.8)
 
     display.blank()
     time.sleep(2)
-    display.type_text("  Glaub dir selbst auch nicht.", Fore.RED, 0.05)
+    display.type_text("  Glaub dir selbst auch nicht.", _RED, 0.05)
     time.sleep(3)
     display.clear()
 
@@ -92,11 +90,11 @@ def main():
 
     except KeyboardInterrupt:
         display.clear()
-        print(f"\n  {Fore.RED}Du versuchst zu fliehen.{Style.RESET_ALL}")
+        print(f"\n  {_RED}Du versuchst zu fliehen.{_RESET}")
         time.sleep(1)
-        print(f"  {Fore.LIGHTBLACK_EX}Hollowmere laesst dich gehen.{Style.RESET_ALL}")
+        print(f"  {_GRAY}Hollowmere laesst dich gehen.{_RESET}")
         time.sleep(1)
-        print(f"  {Fore.LIGHTBLACK_EX}Diesmal.{Style.RESET_ALL}")
+        print(f"  {_GRAY}Diesmal.{_RESET}")
         time.sleep(1)
         print()
 

@@ -1,5 +1,19 @@
 """HOLLOWMERE - Act 1, Chapter 3: Der Vermisste"""
-from colorama import Fore, Style
+from engine.display import (
+    _RED, _GREEN, _YELLOW, _BLUE, _MAGENTA, _CYAN, _WHITE, _GRAY,
+    _BOLD, _DIM, _RESET,
+)
+
+class Fore:
+    RED = _RED; GREEN = _GREEN; YELLOW = _YELLOW; BLUE = _BLUE
+    MAGENTA = _MAGENTA; CYAN = _CYAN; WHITE = _WHITE
+    LIGHTBLACK_EX = _GRAY; LIGHTYELLOW_EX = _YELLOW
+    LIGHTCYAN_EX = _CYAN; LIGHTBLUE_EX = _BLUE
+    LIGHTGREEN_EX = _GREEN; LIGHTMAGENTA_EX = _MAGENTA
+    LIGHTWHITE_EX = _WHITE
+
+class Style:
+    BRIGHT = _BOLD; DIM = _DIM; RESET_ALL = _RESET
 
 
 def run(display, state):

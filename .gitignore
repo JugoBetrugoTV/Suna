@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 *.pyo
+python_portable/
+python_portable.zip
