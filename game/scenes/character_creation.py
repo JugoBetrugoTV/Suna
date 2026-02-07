@@ -122,7 +122,7 @@ def run(display, state):
         display.pause(1)
         display.narration("...")
         display.pause(1)
-        display.narration("Wenn du das sagst.", Fore.LIGHTBLACK_EX)
+        display.narration("Wenn du das sagst.")
         state.set_flag("trauma_none")
 
     display.pause(1.5)

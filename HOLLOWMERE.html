@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>HOLLOWMERE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Courier New',monospace}
+canvas{image-rendering:pixelated;image-rendering:crisp-edges;cursor:none}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#dialogue-box{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:700px;max-width:90vw;background:rgba(0,0,0,0.92);border:2px solid #555;border-radius:4px;padding:16px 20px;display:none;pointer-events:auto}
+#dialogue-box.show{display:block}
+#dlg-speaker{color:#f0c040;font-size:14px;font-weight:bold;margin-bottom:6px}
+#dlg-text{color:#ddd;font-size:13px;line-height:1.5;min-height:40px}
+#dlg-text.horror{color:#c00}
+#dlg-text.thought{color:#b070d0;font-style:italic}
+#dlg-choices{margin-top:10px}
+#dlg-choices button{display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid #555;color:#ddd;padding:8px 12px;margin:4px 0;font-family:inherit;font-size:12px;cursor:pointer;pointer-events:auto}
+#dlg-choices button:hover{background:rgba(255,200,50,0.15);border-color:#f0c040;color:#fff}
+#dlg-advance{position:absolute;bottom:8px;right:14px;color:#666;font-size:11px}
+#hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:20px;align-items:center;background:rgba(0,0,0,0.6);padding:6px 16px;border-radius:4px}
+#hud span{color:#aaa;font-size:11px}
+#ms-bar{width:120px;height:8px;background:#333;border-radius:4px;overflow:hidden}
+#ms-fill{height:100%;background:#4a4;transition:width 0.5s,background 0.5s;border-radius:4px}
+#interact-hint{position:absolute;bottom:140px;left:50%;transform:translateX(-50%);color:#f0c040;font-size:12px;background:rgba(0,0,0,0.7);padding:4px 12px;border-radius:3px;display:none}
+#overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:10;pointer-events:auto;transition:opacity 1s}
+#overlay.hidden{opacity:0;pointer-events:none}
+#overlay h1{color:#8b0000;font-size:28px;letter-spacing:8px;margin-bottom:8px}
+#overlay p{color:#666;font-size:12px;margin-bottom:30px}
+#overlay .intro-text{color:#888;font-size:13px;text-align:center;line-height:2;max-width:500px}
+#overlay .intro-text .red{color:#8b0000}
+#overlay button{background:none;border:1px solid #555;color:#aaa;padding:8px 24px;font-family:inherit;font-size:13px;cursor:pointer;margin:4px;pointer-events:auto}
+#overlay button:hover{border-color:#f0c040;color:#f0c040}
+#overlay input{background:rgba(255,255,255,0.08);border:1px solid #555;color:#ddd;padding:8px 14px;font-family:inherit;font-size:14px;text-align:center;width:200px;outline:none}
+#overlay input:focus{border-color:#f0c040}
+#overlay .step{display:none}
+#overlay .step.active{display:flex;flex-direction:column;align-items:center;gap:12px}
+#overlay .attr-row{display:flex;align-items:center;gap:10px;color:#aaa;font-size:12px}
+#overlay .attr-row button{padding:2px 10px;font-size:14px}
+#overlay .attr-row .val{color:#f0c040;width:20px;text-align:center;font-size:14px}
+#overlay .attr-row .name{width:140px;text-align:right}
+#overlay .pts{color:#f0c040;font-size:13px;margin-bottom:8px}
+#notebook{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);border:1px solid #555;border-radius:4px;padding:10px;max-width:250px;max-height:60vh;overflow-y:auto;display:none;pointer-events:auto;z-index:5}
+#notebook h3{color:#f0c040;font-size:12px;margin-bottom:6px}
+#notebook .entry{color:#aaa;font-size:11px;margin:4px 0;padding:4px;border-bottom:1px solid #333}
+#nb-toggle{position:absolute;top:10px;right:10px;color:#f0c040;font-size:20px;cursor:pointer;pointer-events:auto;z-index:4;background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:3px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="hud"><span>Mental State:</span><div id="ms-bar"><div id="ms-fill" style="width:80%"></div></div><span id="ms-label">80%</span><span id="day-label">Tag 1</span><span id="time-label">Nachmittag</span></div>
+  <div id="interact-hint">[LEERTASTE] Interagieren</div>
+  <div id="dialogue-box"><div id="dlg-speaker"></div><div id="dlg-text"></div><div id="dlg-choices"></div><div id="dlg-advance">LEERTASTE ▶</div></div>
+  <div id="nb-toggle" onclick="toggleNotebook()">📓</div>
+  <div id="notebook"><h3>Notizbuch</h3><div id="nb-entries"></div></div>
+  <div id="overlay">
+    <div class="step active" id="step-title">
+      <h1>HOLLOWMERE</h1>
+      <p>Ein Ort, der auf keiner Karte verzeichnet ist.</p>
+      <button onclick="startIntro()">Spielen</button>
+    </div>
+    <div class="step" id="step-intro">
+      <div class="intro-text" id="intro-lines"></div>
+    </div>
+    <div class="step" id="step-name">
+      <p style="color:#888">Wer bist du?</p>
+      <input id="name-input" placeholder="Dein Name..." maxlength="20">
+      <button onclick="submitName()">Weiter</button>
+    </div>
+    <div class="step" id="step-origin">
+      <p style="color:#888">Warum bist du hier?</p>
+      <button onclick="pickOrigin('journalist')">Journalist/in — Ich suche eine Geschichte</button>
+      <button onclick="pickOrigin('relative')">Verwandtschaft — Ich suche jemanden</button>
+      <button onclick="pickOrigin('stranger')">Zufall — Autopanne, falscher Ort</button>
+    </div>
+    <div class="step" id="step-trauma">
+      <p style="color:#888">Was traegst du mit dir?</p>
+      <button onclick="pickTrauma('loss')">Ich habe jemanden verloren</button>
+      <button onclick="pickTrauma('accident')">Es gab einen Unfall. Meine Schuld.</button>
+      <button onclick="pickTrauma('memory')">Eine verdraengte Erinnerung</button>
+      <button onclick="pickTrauma('none')">Nichts. Mir geht es gut.</button>
+    </div>
+    <div class="step" id="step-attrs">
+      <p style="color:#888">Verteile 10 Punkte</p>
+      <div class="pts" id="pts-left">Verbleibend: 10</div>
+      <div class="attr-row"><span class="name">Willenskraft</span><button onclick="attrChange('wil',-1)">−</button><span class="val" id="a-wil">1</span><button onclick="attrChange('wil',1)">+</button></div>
+      <div class="attr-row"><span class="name">Empathie</span><button onclick="attrChange('emp',-1)">−</button><span class="val" id="a-emp">1</span><button onclick="attrChange('emp',1)">+</button></div>
+      <div class="attr-row"><span class="name">Wahrnehmung</span><button onclick="attrChange('per',-1)">−</button><span class="val" id="a-per">1</span><button onclick="attrChange('per',1)">+</button></div>
+      <div class="attr-row"><span class="name">Gewaltbereitschaft</span><button onclick="attrChange('agg',-1)">−</button><span class="val" id="a-agg">1</span><button onclick="attrChange('agg',1)">+</button></div>
+      <div class="attr-row"><span class="name">Verstand</span><button onclick="attrChange('int',-1)">−</button><span class="val" id="a-int">1</span><button onclick="attrChange('int',1)">+</button></div>
+      <button onclick="startGame()">Beginnen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  HOLLOWMERE — HTML5 Pixel Art Horror RPG
+// ============================================================
+
+const C = document.getElementById('game');
+const ctx = C.getContext('2d');
+const T = 16; // tile size
+const S = 3;  // scale
+const TS = T * S; // display tile size = 48
+
+// Resize canvas to fill window
+function resize() {
+  C.width = Math.floor(window.innerWidth / TS) * TS;
+  C.height = Math.floor(window.innerHeight / TS) * TS;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================
+//  GAME STATE
+// ============================================================
+const GS = {
+  name: '', origin: '', trauma: '',
+  attrs: { wil:1, emp:1, per:1, agg:1, int:1 },
+  ptsLeft: 10,
+  mentalState: 80,
+  guilt: 0,
+  day: 1,
+  timeOfDay: 'afternoon', // morning, afternoon, evening, night
+  flags: new Set(),
+  clues: [],
+  notebook: [],
+  relationships: { maren:50, brandt:50, ernst:50, nina:50, lena:50 },
+  phase: 'title', // title, intro, creation, playing, dialogue
+};
+
+function hasFlag(f) { return GS.flags.has(f); }
+function setFlag(f) { GS.flags.add(f); }
+function check(attr, val) { return GS.attrs[attr] >= val; }
+function modMS(n) { GS.mentalState = Math.max(0, Math.min(100, GS.mentalState + n)); updateHUD(); }
+function modRel(npc, n) { GS.relationships[npc] = Math.max(0, Math.min(100, GS.relationships[npc] + n)); }
+function addNote(t) { if (!GS.notebook.includes(t)) { GS.notebook.push(t); updateNotebook(); } }
+function addClue(c) { if (!GS.clues.includes(c)) GS.clues.push(c); }
+
+function updateHUD() {
+  const ms = GS.mentalState;
+  const fill = document.getElementById('ms-fill');
+  fill.style.width = ms + '%';
+  fill.style.background = ms > 60 ? '#4a4' : ms > 35 ? '#ca3' : '#a33';
+  document.getElementById('ms-label').textContent = ms + '%';
+  document.getElementById('day-label').textContent = 'Tag ' + GS.day;
+  const timeDE = {morning:'Morgen',afternoon:'Nachmittag',evening:'Abend',night:'Nacht'};
+  document.getElementById('time-label').textContent = timeDE[GS.timeOfDay] || '';
+}
+
+function updateNotebook() {
+  const el = document.getElementById('nb-entries');
+  el.innerHTML = GS.notebook.map(n => '<div class="entry">' + n + '</div>').join('');
+}
+
+function toggleNotebook() {
+  const nb = document.getElementById('notebook');
+  nb.style.display = nb.style.display === 'block' ? 'none' : 'block';
+}
+
+// ============================================================
+//  SPRITE DRAWING (procedural pixel art)
+// ============================================================
+const spriteCache = {};
+
+function drawPixels(pixels, w, h) {
+  const key = JSON.stringify(pixels);
+  if (spriteCache[key]) return spriteCache[key];
+  const oc = document.createElement('canvas');
+  oc.width = w; oc.height = h;
+  const ox = oc.getContext('2d');
+  for (const [x, y, color] of pixels) {
+    ox.fillStyle = color;
+    ox.fillRect(x, y, 1, 1);
+  }
+  spriteCache[key] = oc;
+  return oc;
+}
+
+// Tile sprites 16x16
+function makeTileGrass(variant) {
+  const px = [];
+  const base = ['#4a7c3f','#5a9c4f','#3d6b34'][variant % 3];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = base;
+    if ((x+y*7+variant*3)%11===0) c = '#5a9c4f';
+    if ((x*3+y*5+variant)%17===0) c = '#3d6b34';
+    px.push([x,y,c]);
+  }
+  // Occasional flower
+  if (variant === 1) { px.push([4,6,'#e44'],[5,5,'#e44'],[4,5,'#e88'],[5,6,'#e88']); }
+  if (variant === 4) { px.push([10,9,'#dd0'],[11,9,'#dd0'],[10,10,'#dd8'],[11,10,'#dd8']); }
+  return drawPixels(px,16,16);
+}
+
+function makeTilePath() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#8b7355';
+    if ((x+y*3)%7===0) c = '#a08060';
+    if ((x*5+y*2)%11===0) c = '#7a6548';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileWood() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#6b4423';
+    if (x%4===0) c = '#5a3818';
+    if ((x+y)%8===0) c = '#7c5530';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileStone() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#808080';
+    if ((x+y*3)%5===0) c = '#707070';
+    if ((x*2+y)%7===0) c = '#909090';
+    if (y%8===0||x%8===0) c = '#666';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileRoof(color) {
+  const px = [];
+  const base = color || '#8b4513';
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = base;
+    if (y%3===0) c = '#a0522d';
+    if (x%6===0) c = '#7a3a0f';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileDoor(color) {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#4a3019';
+    if (x>=3&&x<=12&&y>=1&&y<=15) c = color || '#6b4423';
+    if (x>=6&&x<=7&&y>=7&&y<=8) c = '#c8a84e'; // handle
+    if (x===3||x===12) c = '#3a2010';
+    if (y===0) c = '#3a2010';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileWater(frame) {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#3a6ea5';
+    if ((x+y+frame)%4===0) c = '#4a8ec5';
+    if ((x*2+y+frame)%7===0) c = '#2a5e95';
+    if ((x+y*3+frame*2)%9===0) c = '#5a9ed5';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileTree() {
+  const px = [];
+  // Trunk
+  for (let y=10;y<16;y++) for (let x=6;x<10;x++) px.push([x,y,'#5a3818']);
+  // Leaves
+  for (let y=1;y<12;y++) for (let x=2;x<14;x++) {
+    if (Math.abs(x-8)+Math.abs(y-5) < 8) {
+      let c = '#2a5a24';
+      if ((x+y)%3===0) c = '#3a6a34';
+      if ((x*2+y)%5===0) c = '#1a4a18';
+      px.push([x,y,c]);
+    }
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileDarkTree() {
+  const px = [];
+  for (let y=10;y<16;y++) for (let x=6;x<10;x++) px.push([x,y,'#2a1808']);
+  for (let y=0;y<13;y++) for (let x=1;x<15;x++) {
+    if (Math.abs(x-8)+Math.abs(y-5) < 9) {
+      let c = '#1a3a14';
+      if ((x+y)%3===0) c = '#0f2a0f';
+      if ((x*2+y)%5===0) c = '#253a20';
+      px.push([x,y,c]);
+    }
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileWell() {
+  const px = [];
+  // Stone base
+  for (let y=4;y<16;y++) for (let x=2;x<14;x++) {
+    if (y<6||y>13||x<4||x>11) { px.push([x,y,'#808080']); }
+    else { px.push([x,y,'#666']); } // sealed top - dark
+  }
+  // Cement seal
+  for (let y=6;y<14;y++) for (let x=4;x<12;x++) {
+    let c = '#777';
+    if ((x+y)%3===0) c = '#888';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileFlower(color) {
+  const px = [];
+  // grass base
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) px.push([x,y,'#4a7c3f']);
+  // flowers
+  const fc = color || '#e44';
+  [[4,4],[8,6],[12,3],[6,10],[10,12]].forEach(([fx,fy]) => {
+    px.push([fx,fy,fc],[fx+1,fy,fc],[fx,fy+1,fc],[fx+1,fy+1,fc]);
+    px.push([fx,fy-1,'#fe8'],[fx+1,fy-1,'#fe8']);
+  });
+  return drawPixels(px,16,16);
+}
+
+function makeTileWindowWall() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#6b4423';
+    if (x%4===0) c = '#5a3818';
+    px.push([x,y,c]);
+  }
+  // Window
+  for (let y=3;y<10;y++) for (let x=4;x<12;x++) {
+    px.push([x,y,'#3a5a8a']);
+    if (x===4||x===11||y===3||y===9) px.push([x,y,'#4a3019']);
+    if (x===7||x===8) px.push([x,y,'#4a3019']);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileChurchWall() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#505050';
+    if ((x+y*3)%5===0) c = '#606060';
+    if (x%8===0) c = '#444';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+function makeTileChurchRoof() {
+  const px = [];
+  for (let y=0;y<16;y++) for (let x=0;x<16;x++) {
+    let c = '#404040';
+    if (y%3===0) c = '#4a4a4a';
+    px.push([x,y,c]);
+  }
+  return drawPixels(px,16,16);
+}
+
+// Character sprite maker
+function makeCharSprite(skinC, hairC, shirtC, pantsC, dir, frame) {
+  const px = [];
+  const f = frame % 2;
+  // Head (y 0-5)
+  for (let y=0;y<6;y++) for (let x=4;x<12;x++) px.push([x,y,skinC]);
+  // Hair
+  for (let x=4;x<12;x++) px.push([x,0,hairC]);
+  if (dir===0) { for (let x=4;x<12;x++) px.push([x,1,hairC]); } // up: back of head
+  else {
+    for (let x=4;x<6;x++) { px.push([x,1,hairC]); px.push([x,2,hairC]); }
+    for (let x=10;x<12;x++) { px.push([x,1,hairC]); px.push([x,2,hairC]); }
+  }
+  // Eyes (front/left/right)
+  if (dir===2) { px.push([6,3,'#222'],[9,3,'#222']); } // down
+  if (dir===1) { px.push([5,3,'#222'],[8,3,'#222']); } // left
+  if (dir===3) { px.push([7,3,'#222'],[10,3,'#222']); } // right
+  // Body (y 6-11)
+  for (let y=6;y<12;y++) for (let x=4;x<12;x++) px.push([x,y,shirtC]);
+  // Arms
+  for (let y=6;y<10;y++) { px.push([3,y,shirtC]); px.push([12,y,shirtC]); }
+  // Hands
+  px.push([3,10,skinC]); px.push([12,10,skinC]);
+  // Legs (y 12-15)
+  const legOff = f === 1 ? 1 : 0;
+  for (let y=12;y<16;y++) {
+    for (let x=5;x<8;x++) px.push([x, y, pantsC]);
+    for (let x=8;x<11;x++) px.push([x, y, pantsC]);
+  }
+  // Walk anim: shift legs
+  if (f===1 && (dir===0||dir===2)) {
+    px.push([4,14,pantsC]); px.push([11,14,pantsC]);
+  }
+  // Shoes
+  for (let x=5;x<8;x++) px.push([x,15,'#3a2a1a']);
+  for (let x=8;x<11;x++) px.push([x,15,'#3a2a1a']);
+  return drawPixels(px,16,16);
+}
+
+// Pre-generate tiles
+const TILES = {};
+function initTiles() {
+  for (let i=0;i<6;i++) TILES['grass'+i] = makeTileGrass(i);
+  TILES.path = makeTilePath();
+  TILES.wood = makeTileWood();
+  TILES.stone = makeTileStone();
+  TILES.roof = makeTileRoof();
+  TILES.roofDark = makeTileRoof('#555');
+  TILES.door = makeTileDoor('#6b4423');
+  TILES.doorChurch = makeTileDoor('#444');
+  TILES.tree = makeTileTree();
+  TILES.darkTree = makeTileDarkTree();
+  TILES.well = makeTileWell();
+  TILES.flower1 = makeTileFlower('#e44');
+  TILES.flower2 = makeTileFlower('#44e');
+  TILES.flower3 = makeTileFlower('#ee4');
+  TILES.windowWall = makeTileWindowWall();
+  TILES.churchWall = makeTileChurchWall();
+  TILES.churchRoof = makeTileChurchRoof();
+  for (let i=0;i<4;i++) TILES['water'+i] = makeTileWater(i);
+}
+initTiles();
+
+// ============================================================
+//  MAP (40x30 tile grid)
+// ============================================================
+// Legend:
+// .=grass T=tree D=dark tree p=path w=wood s=stone
+// r=roof R=dark roof d=door W=window wall c=church wall
+// C=church roof B=well(brunnen) f=flower ~=water
+// Numbers after = variant
+
+const MAP_W = 40, MAP_H = 35;
+const mapStr = `
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+TT......TT....pppppp....TT......TT...TT
+TT......TT....p....p....TT......TT...TT
+TT..ff..TT....p....p....TT..ff..TT...TT
+TTTTTTTTTTCCCCp....prrrrTTTTTTTTTT...TT
+TT........CCCCp....prwwrTT........TT.TT
+TT........ccccpp..pprwwr..........TT.TT
+TT..ff....cccc.pppp.rddr..ff......TT.TT
+TT........cccc.p..p.p..p.........TT..TT
+TTT..TT...cDcc.p..p.p..p...TT..TTT..TT
+TT........cccc.p..p.p..p.........TT..TT
+TT..pp....pppppp..pppppp....pp.....pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pp....p....BB....p.....pp.....pp.TT
+TT..pppppppp...BB...pppppppppp....pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pp.rwwr.pppppppp.rwwr..pp.....pp.TT
+TT..pp.rwwr.p......p.rwwr..pp.....pp.TT
+TT..pp.rddr.p......p.rddr..pp..ff.pp.TT
+TT..pp.p..p.p......p.p..p..pp.....pp.TT
+TT..pppppppppp....pppppppppppp.....pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pp....p..........p.....pp..ff.pp.TT
+TT..pp....p..........p.....pp.....pp.TT
+TT..pppppppppppppppppppppppppp.....pp.TT
+TT......pp..............pp.........pp.TT
+TT......pp..............pp..........TTT
+TT......pp..............pp..........TTT
+TT..ff..pp..............pp..ff......TTT
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+`.trim().split('\n');
+
+// Parse map into arrays
+const mapTiles = []; // visual tile id
+const mapSolid = []; // collision
+
+function tileAt(x,y) {
+  if (x<0||y<0||x>=MAP_W||y>=MAP_H) return 'T';
+  return mapStr[y]?.[x] || 'T';
+}
+
+function getTileSprite(ch, x, y) {
+  const v = (x*7+y*13) % 6;
+  switch(ch) {
+    case '.': case 'f': return 'grass' + v;
+    case 'T': return 'tree';
+    case 'D': return 'darkTree';
+    case 'p': return 'path';
+    case 'w': return 'wood';
+    case 'W': return 'windowWall';
+    case 's': return 'stone';
+    case 'r': return 'roof';
+    case 'R': return 'roofDark';
+    case 'd': return 'door';
+    case 'c': return 'churchWall';
+    case 'C': return 'churchRoof';
+    case 'B': return 'well';
+    case '~': return 'water0';
+    default: return 'grass0';
+  }
+}
+
+function isSolid(ch) {
+  return 'TDwWsrRcC'.includes(ch);
+}
+
+// Overlay tiles (flowers on grass)
+function getOverlay(ch, x, y) {
+  if (ch === 'f') {
+    const v = (x*3+y*7) % 3;
+    return 'flower' + (v+1);
+  }
+  return null;
+}
+
+// ============================================================
+//  PLAYER
+// ============================================================
+const player = {
+  x: 19, y: 27, // starting position (south entrance)
+  dir: 0, // 0=up 1=left 2=down 3=right
+  frame: 0,
+  frameTimer: 0,
+  moving: false,
+  speed: 0.06,
+  sprites: {},
+};
+
+function initPlayerSprites() {
+  for (let d=0;d<4;d++) for (let f=0;f<2;f++) {
+    player.sprites[d+'_'+f] = makeCharSprite('#e8b89d','#6a4a2a','#4a6a8a','#3a3a5a',d,f);
+  }
+}
+initPlayerSprites();
+
+// ============================================================
+//  NPCs
+// ============================================================
+const npcs = [
+  { id:'maren', name:'Maren Voss', x:17, y:8, dir:2,
+    skin:'#e8b89d', hair:'#6a3a1a', shirt:'#c8a832', pants:'#eee', sprites:{} },
+  { id:'brandt', name:'Pfarrer Brandt', x:9, y:9, dir:3,
+    skin:'#d4a088', hair:'#888', shirt:'#222', pants:'#222', sprites:{} },
+  { id:'ernst', name:'Ernst Hofer', x:22, y:8, dir:2,
+    skin:'#e8b89d', hair:'#666', shirt:'#6a5a3a', pants:'#4a3a2a', sprites:{} },
+  { id:'nina', name:'Nina Althammer', x:14, y:25, dir:0,
+    skin:'#e8b89d', hair:'#a04020', shirt:'#3a7a4a', pants:'#5a4a3a', sprites:{} },
+  { id:'old_woman', name:'???', x:15, y:16, dir:2,
+    skin:'#d4a088', hair:'#aaa', shirt:'#666', pants:'#555', sprites:{} },
+];
+
+function initNPCSprites() {
+  for (const npc of npcs) {
+    for (let d=0;d<4;d++) for (let f=0;f<2;f++) {
+      npc.sprites[d+'_'+f] = makeCharSprite(npc.skin,npc.hair,npc.shirt,npc.pants,d,f);
+    }
+  }
+}
+initNPCSprites();
+
+// ============================================================
+//  CAMERA
+// ============================================================
+const cam = { x:0, y:0 };
+
+function updateCam() {
+  const tw = C.width / TS;
+  const th = C.height / TS;
+  const tx = player.x - tw/2 + 0.5;
+  const ty = player.y - th/2 + 0.5;
+  cam.x += (tx - cam.x) * 0.1;
+  cam.y += (ty - cam.y) * 0.1;
+}
+
+// ============================================================
+//  INPUT
+// ============================================================
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space' || e.code === 'KeyE') {
+    e.preventDefault();
+    handleInteract();
+  }
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function handleInteract() {
+  if (GS.phase === 'dialogue') {
+    advanceDialogue();
+    return;
+  }
+  if (GS.phase !== 'playing') return;
+  // Check NPC nearby
+  const fx = player.x + [0,-1,0,1][player.dir];
+  const fy = player.y + [-1,0,1,0][player.dir];
+  for (const npc of npcs) {
+    const dx = Math.abs(npc.x - player.x);
+    const dy = Math.abs(npc.y - player.y);
+    if (dx <= 1.5 && dy <= 1.5) {
+      startNPCDialogue(npc);
+      return;
+    }
+  }
+  // Check well
+  const wx = Math.abs(player.x - 15.5);
+  const wy = Math.abs(player.y - 15.5);
+  if (wx < 2 && wy < 2 && !hasFlag('examined_well')) {
+    startWellDialogue();
+    return;
+  }
+}
+
+// ============================================================
+//  DIALOGUE SYSTEM
+// ============================================================
+let dlgQueue = [];
+let dlgTyping = false;
+let dlgFullText = '';
+let dlgShownChars = 0;
+let dlgTypeInterval = null;
+let dlgChoices = null;
+let dlgChoiceCallback = null;
+
+function showDialogue(speaker, text, cssClass) {
+  const box = document.getElementById('dialogue-box');
+  box.classList.add('show');
+  document.getElementById('dlg-speaker').textContent = speaker;
+  const dtEl = document.getElementById('dlg-text');
+  dtEl.className = cssClass || '';
+  dtEl.textContent = '';
+  document.getElementById('dlg-choices').innerHTML = '';
+  document.getElementById('dlg-advance').style.display = 'block';
+  GS.phase = 'dialogue';
+  dlgFullText = text;
+  dlgShownChars = 0;
+  dlgTyping = true;
+  clearInterval(dlgTypeInterval);
+  dlgTypeInterval = setInterval(() => {
+    dlgShownChars++;
+    dtEl.textContent = dlgFullText.substring(0, dlgShownChars);
+    if (dlgShownChars >= dlgFullText.length) {
+      clearInterval(dlgTypeInterval);
+      dlgTyping = false;
+      if (dlgChoices) showChoiceButtons();
+    }
+  }, 30);
+}
+
+function showChoiceButtons() {
+  document.getElementById('dlg-advance').style.display = 'none';
+  const el = document.getElementById('dlg-choices');
+  el.innerHTML = '';
+  for (let i=0; i<dlgChoices.length; i++) {
+    const ch = dlgChoices[i];
+    if (ch.req && !ch.req()) continue;
+    const btn = document.createElement('button');
+    btn.textContent = ch.text;
+    btn.onclick = () => {
+      el.innerHTML = '';
+      dlgChoices = null;
+      if (ch.action) ch.action();
+      if (dlgQueue.length > 0) {
+        const next = dlgQueue.shift();
+        next();
+      } else {
+        closeDialogue();
+      }
+    };
+    el.appendChild(btn);
+  }
+}
+
+function advanceDialogue() {
+  if (dlgTyping) {
+    clearInterval(dlgTypeInterval);
+    document.getElementById('dlg-text').textContent = dlgFullText;
+    dlgTyping = false;
+    dlgShownChars = dlgFullText.length;
+    if (dlgChoices) showChoiceButtons();
+    return;
+  }
+  if (dlgChoices) return; // waiting for choice
+  if (dlgQueue.length > 0) {
+    const next = dlgQueue.shift();
+    next();
+  } else {
+    closeDialogue();
+  }
+}
+
+function closeDialogue() {
+  document.getElementById('dialogue-box').classList.remove('show');
+  GS.phase = 'playing';
+  dlgQueue = [];
+  dlgChoices = null;
+}
+
+function queueLine(speaker, text, cssClass) {
+  dlgQueue.push(() => showDialogue(speaker, text, cssClass));
+}
+
+function queueChoice(choices) {
+  dlgQueue.push(() => { dlgChoices = choices; });
+}
+
+function queueAction(fn) {
+  dlgQueue.push(() => { fn(); if (dlgQueue.length>0) dlgQueue.shift()(); else closeDialogue(); });
+}
+
+// ============================================================
+//  NPC DIALOGUES
+// ============================================================
+function startNPCDialogue(npc) {
+  // Face player
+  if (player.x < npc.x) npc.dir = 1;
+  else if (player.x > npc.x) npc.dir = 3;
+  else if (player.y < npc.y) npc.dir = 0;
+  else npc.dir = 2;
+
+  dlgQueue = [];
+  dlgChoices = null;
+
+  if (npc.id === 'maren') dialogueMaren();
+  else if (npc.id === 'brandt') dialogueBrandt();
+  else if (npc.id === 'ernst') dialogueErnst();
+  else if (npc.id === 'nina') dialogueNina();
+  else if (npc.id === 'old_woman') dialogueOldWoman();
+
+  if (dlgQueue.length > 0) dlgQueue.shift()();
+}
+
+function dialogueMaren() {
+  if (hasFlag('talked_maren')) {
+    queueLine('Maren', 'Brauchen Sie noch etwas? Das Abendessen gibt es ab sechs.');
+    return;
+  }
+  setFlag('talked_maren');
+  queueLine('Maren', 'Oh! Ein Gast!');
+  queueLine('', 'Sie laechelt. Breit. Warm. Ihre Augen brauchen eine Sekunde laenger.', 'thought');
+  queueLine('Maren', 'Willkommen in Hollowmere! Ich bin Maren. Sie muessen hungrig sein nach der Fahrt.');
+
+  queueChoice([
+    { text: GS.name + '. Haetten Sie ein Zimmer frei?',
+      action: () => {
+        modRel('maren', 5);
+        queueLine('Maren', 'Natuerlich! Zimmer drei, oben rechts. Frisch bezogen.');
+        queueLine('', 'Sie greift unter die Theke. Ein Schluessel. Kein Gaestebuch.', 'thought');
+        if (check('per',3)) {
+          queueLine('', '(Kein Gaestebuch. Oder sie hat es weggeraeumt, bevor ich kam.)', 'thought');
+          addNote('Maren hat kein Gaestebuch. Seltsam fuer ein Gasthaus.');
+        }
+      }
+    },
+    { text: 'Der Fahrer sagte, ich soll nicht zu lang bleiben. Warum?',
+      action: () => {
+        modRel('maren', -3);
+        queueLine('', 'Marens Laecheln flackert. Nur fuer einen Moment.', 'thought');
+        queueLine('Maren', 'Ach, der alte Gerhard. Redet immer so. Meint nichts Boeses.');
+        queueLine('Maren', 'Bleiben Sie so lang Sie wollen. Wirklich.');
+        if (check('emp',3)) {
+          queueLine('', '(Das "wirklich" war zu betont. Sie uebt das.)', 'thought');
+          addNote('Maren besteht darauf, dass ich bleiben soll. Zu nachdruecklich.');
+        }
+      }
+    },
+    { text: 'Wie viele Gaeste haben Sie normalerweise?',
+      req: () => check('per',3),
+      action: () => {
+        queueLine('Maren', 'Wir sind ein kleiner Ort. Nicht viele kommen hierher.');
+        queueLine('', 'Ihre Haende hinter der Theke sind fuer einen Moment still.', 'thought');
+        queueLine('Maren', 'Umso schoener, dass Sie da sind!');
+        addNote('Maren weicht der Frage nach Gaesten aus.');
+      }
+    },
+  ]);
+}
+
+function dialogueBrandt() {
+  if (hasFlag('talked_brandt')) {
+    queueLine('Brandt', 'Die Kirche ist immer offen. Falls Sie Ruhe suchen.');
+    return;
+  }
+  setFlag('talked_brandt');
+  queueLine('Brandt', 'Ah. Ein neues Gesicht.');
+  queueLine('', 'Er streckt die Hand aus. Sein Griff ist fest, aber die Finger sind kalt.', 'thought');
+  queueLine('Brandt', 'Thomas Brandt. Pfarrer. Fuer das, was es wert ist.');
+
+  queueChoice([
+    { text: 'Grosse Kirche fuer einen kleinen Ort.',
+      action: () => {
+        modRel('brandt', 5);
+        queueLine('Brandt', 'Ja.');
+        queueLine('Brandt', 'Sie wurde gebaut, als der Ort groesser war. Oder als der Glaube groesser war.');
+        queueLine('Brandt', 'Ich bin mir nicht sicher, was zuerst geschrumpft ist.');
+      }
+    },
+    { text: 'Ist Hollowmere schon immer so... ruhig gewesen?',
+      req: () => check('emp',2),
+      action: () => {
+        modRel('brandt', 3);
+        queueLine('', 'Er schaut zum Fenster. Lange.', 'thought');
+        queueLine('Brandt', 'Manche Naechte sind lauter als andere.');
+        queueLine('Brandt', 'Aber das werden Sie selbst merken.');
+        addNote('Pfarrer Brandt: "Manche Naechte sind lauter als andere."');
+      }
+    },
+  ]);
+}
+
+function dialogueErnst() {
+  if (hasFlag('talked_ernst')) {
+    queueLine('Ernst', 'Batterien im Regal links. Falls Sie welche brauchen.');
+    return;
+  }
+  setFlag('talked_ernst');
+  queueLine('Ernst', 'Guten Tag, guten Tag! Der neue Gast, nicht wahr? Man hoert ja so Dinge.');
+  queueLine('', 'Klein, duenn, Brille. Immer in Bewegung. Haende nie still.', 'thought');
+
+  queueChoice([
+    { text: 'Man hoert Dinge? Was fuer Dinge?',
+      action: () => {
+        queueLine('Ernst', 'Nichts, nichts! Kleiner Ort. Man weiss eben, wenn jemand Neues da ist.');
+        queueLine('', 'Er sortiert Dosen. Stellt sie gerade. Dreht das Etikett nach vorn.', 'thought');
+        if (check('per',3)) {
+          queueLine('', '(Er hat mich nicht gefragt, wie lange ich bleibe. Er weiss es schon.)', 'thought');
+        }
+      }
+    },
+    { text: 'Ich brauche eine Taschenlampe.',
+      action: () => {
+        queueLine('Ernst', 'Taschenlampe? Natuerlich. Gute Wahl. Die Naechte sind dunkel hier.');
+        queueLine('', 'Seine Hand zittert leicht, als er sie dir reicht.', 'thought');
+        setFlag('has_flashlight');
+      }
+    },
+    { text: 'Wie lange leben Sie schon hier?',
+      req: () => check('int',3),
+      action: () => {
+        queueLine('Ernst', 'Oh, schon... schon eine Weile.');
+        queueLine('', 'Er wendet sich ab. Sortiert Regale.', 'thought');
+        queueLine('Ernst', '30 Jahre. Oder mehr. Man verliert den Ueberblick.');
+        if (check('emp',3)) {
+          queueLine('', '(30 Jahre. Und doch klingt er wie jemand, der nie angekommen ist.)', 'thought');
+          addNote('Ernst Hofer: Lebt seit 30 Jahren hier. Wirkt nicht heimisch.');
+        }
+      }
+    },
+  ]);
+  queueAction(() => {
+    queueLine('Ernst', 'Ach, und... seien Sie vorsichtig da draussen. Nachts.');
+    queueLine('Ernst', 'Die Wege sind uneben. Man stolpert leicht.');
+    queueLine('', 'Er laechelt. Es erreicht seine Augen nicht.', 'thought');
+    modRel('ernst', 5);
+  });
+}
+
+function dialogueNina() {
+  if (hasFlag('talked_nina')) {
+    queueLine('Nina', 'Grossvater braucht seine Medizin. Ich muss weiter.');
+    return;
+  }
+  setFlag('talked_nina');
+  queueLine('Nina', 'Sie sind der Gast.');
+  queueLine('', 'Keine Frage. Eine Feststellung. Sommersprossig. Muede.', 'thought');
+
+  queueChoice([
+    { text: GS.name + '. Und du?',
+      action: () => {
+        modRel('nina', 5);
+        queueLine('Nina', 'Nina. Althammer.');
+        queueLine('Nina', 'Mein Grossvater lebt am Rand des Ortes. Ich kuemmere mich um ihn.');
+      }
+    },
+    { text: 'Du siehst muede aus.',
+      req: () => check('emp',3),
+      action: () => {
+        modRel('nina', 10);
+        queueLine('', 'Sie blinzelt. Ueberrascht.', 'thought');
+        queueLine('Nina', 'Mein Grossvater... er schlaeft schlecht. Und wenn er nicht schlaeft, schlafe ich nicht.');
+        queueLine('Nina', 'Aber danke. Fuer die Ehrlichkeit.');
+        queueLine('', 'Ein halbes Laecheln. Das erste, das echt wirkt in diesem Ort.', 'thought');
+      }
+    },
+  ]);
+  queueAction(() => {
+    queueLine('', 'Sie will gehen. Dreht sich noch einmal um.', 'thought');
+    queueLine('Nina', 'Nicht nachts in den Wald gehen. Bitte.');
+    queueLine('', 'Ihre Augen. Da ist Angst. Echte Angst.', 'thought');
+    addNote('Nina Althammer. Hat Angst vor dem Wald. Aufrichtig.');
+    setFlag('met_nina');
+  });
+}
+
+function dialogueOldWoman() {
+  if (hasFlag('talked_old_woman')) {
+    queueLine('', 'Sie sitzt da. Starrt den Brunnen an. Reglos.', 'thought');
+    return;
+  }
+  setFlag('talked_old_woman');
+  queueLine('', 'Du setzt dich neben sie. Sie reagiert nicht.', 'thought');
+  queueLine(GS.name, 'Guten Tag. Wohnen Sie hier?');
+  queueLine('', 'Stille. Zehn Sekunden. Zwanzig.', 'thought');
+  queueLine('', 'Sie dreht den Kopf. Langsam. Laechelt.', 'thought');
+  queueLine('', 'Dann steht sie auf und geht. Ohne ein Wort.', 'thought');
+  addNote('Eine alte Frau sitzt am Brunnen und starrt. Spricht nicht.');
+}
+
+function startWellDialogue() {
+  setFlag('examined_well');
+  dlgQueue = [];
+  dlgChoices = null;
+  queueLine('', 'Du legst die Hand auf den Zement. Kuehl. Rau.', 'thought');
+  queueLine('', 'Du klopfst. Einmal. Zweimal.', 'thought');
+  queueLine('', 'Hohl. Der Brunnen ist hohl.', 'thought');
+
+  if (check('per',3)) {
+    queueLine('', 'Und da ist noch etwas. Ein Geruch. Suesslich. Wie verdorbene Blumen.', 'horror');
+    addNote('Der Brunnen ist hohl. Es riecht suesslich. Warum ist er zugemauert?');
+    modMS(-2);
+    addClue('brunnen_hohl');
+  } else {
+    queueLine('', 'Seltsam. Warum mauert man einen Brunnen zu?', 'thought');
+    addNote('Der Brunnen am Marktplatz ist zugemauert.');
+  }
+  dlgQueue.shift()();
+}
+
+// ============================================================
+//  GAME LOOP
+// ============================================================
+let lastTime = 0;
+let waterFrame = 0;
+let waterTimer = 0;
+let nightOverlay = 0;
+let flickerTimer = 0;
+
+function gameLoop(time) {
+  const dt = Math.min(time - lastTime, 50);
+  lastTime = time;
+
+  if (GS.phase === 'playing') updatePlayer(dt);
+  updateCam();
+
+  // Water animation
+  waterTimer += dt;
+  if (waterTimer > 500) { waterTimer = 0; waterFrame = (waterFrame+1)%4; }
+
+  // Night overlay
+  const targetNight = GS.timeOfDay === 'night' ? 0.55 : GS.timeOfDay === 'evening' ? 0.25 : 0.0;
+  nightOverlay += (targetNight - nightOverlay) * 0.02;
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function updatePlayer(dt) {
+  let dx = 0, dy = 0;
+  if (keys['ArrowUp']||keys['KeyW']) { dy = -1; player.dir = 0; }
+  if (keys['ArrowDown']||keys['KeyS']) { dy = 1; player.dir = 2; }
+  if (keys['ArrowLeft']||keys['KeyA']) { dx = -1; player.dir = 1; }
+  if (keys['ArrowRight']||keys['KeyD']) { dx = 1; player.dir = 3; }
+
+  player.moving = dx !== 0 || dy !== 0;
+
+  if (player.moving) {
+    const spd = player.speed * dt;
+    const nx = player.x + dx * spd;
+    const ny = player.y + dy * spd;
+    // Collision check
+    const checkX = Math.floor(nx + (dx>0?0.4:-0.4));
+    const checkY = Math.floor(ny + (dy>0?0.4:-0.4));
+    if (dx !== 0 && !isSolid(tileAt(checkX, Math.floor(player.y)))) player.x = nx;
+    if (dy !== 0 && !isSolid(tileAt(Math.floor(player.x), checkY))) player.y = ny;
+
+    player.frameTimer += dt;
+    if (player.frameTimer > 200) { player.frameTimer = 0; player.frame = (player.frame+1)%2; }
+  } else {
+    player.frame = 0;
+  }
+
+  // Update interact hint
+  let nearNPC = false;
+  for (const npc of npcs) {
+    if (Math.abs(npc.x-player.x)<2 && Math.abs(npc.y-player.y)<2) nearNPC = true;
+  }
+  if (Math.abs(player.x-15.5)<2 && Math.abs(player.y-15.5)<2 && !hasFlag('examined_well')) nearNPC = true;
+  document.getElementById('interact-hint').style.display = nearNPC ? 'block' : 'none';
+}
+
+// ============================================================
+//  RENDERING
+// ============================================================
+function render() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,C.width,C.height);
+
+  const tw = Math.ceil(C.width/TS) + 2;
+  const th = Math.ceil(C.height/TS) + 2;
+  const offX = cam.x * TS;
+  const offY = cam.y * TS;
+
+  // Draw tiles
+  for (let ty=0; ty<th; ty++) {
+    for (let tx=0; tx<tw; tx++) {
+      const mx = Math.floor(cam.x) + tx - 1;
+      const my = Math.floor(cam.y) + ty - 1;
+      const ch = tileAt(mx, my);
+      let tileName = getTileSprite(ch, mx, my);
+      // Water animation
+      if (ch === '~') tileName = 'water' + waterFrame;
+      const sprite = TILES[tileName];
+      if (!sprite) continue;
+      const sx = mx * TS - offX;
+      const sy = my * TS - offY;
+      ctx.drawImage(sprite, sx, sy, TS, TS);
+      // Overlay
+      const ov = getOverlay(ch, mx, my);
+      if (ov && TILES[ov]) ctx.drawImage(TILES[ov], sx, sy, TS, TS);
+    }
+  }
+
+  // Draw NPCs
+  for (const npc of npcs) {
+    const sx = npc.x * TS - offX;
+    const sy = npc.y * TS - offY - TS * 0.3;
+    const spr = npc.sprites[npc.dir+'_0'];
+    if (spr) ctx.drawImage(spr, sx, sy, TS, TS*1.2);
+
+    // Name label if near
+    if (Math.abs(npc.x-player.x)<3 && Math.abs(npc.y-player.y)<3) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.font = '11px Courier New';
+      const tw2 = ctx.measureText(npc.name).width;
+      ctx.fillRect(sx + TS/2 - tw2/2 - 4, sy - 14, tw2 + 8, 16);
+      ctx.fillStyle = '#f0c040';
+      ctx.textAlign = 'center';
+      ctx.fillText(npc.name, sx + TS/2, sy - 2);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  // Draw player
+  const px = player.x * TS - offX;
+  const py = player.y * TS - offY - TS * 0.3;
+  const pSpr = player.sprites[player.dir+'_'+player.frame];
+  if (pSpr) ctx.drawImage(pSpr, px, py, TS, TS*1.2);
+
+  // Night overlay
+  if (nightOverlay > 0.01) {
+    ctx.fillStyle = `rgba(10,10,40,${nightOverlay})`;
+    ctx.fillRect(0,0,C.width,C.height);
+  }
+
+  // Vignette
+  const grd = ctx.createRadialGradient(C.width/2,C.height/2,C.width*0.3,C.width/2,C.height/2,C.width*0.7);
+  grd.addColorStop(0,'rgba(0,0,0,0)');
+  grd.addColorStop(1,'rgba(0,0,0,0.5)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,C.width,C.height);
+
+  // Mental state effects
+  if (GS.mentalState < 40) {
+    flickerTimer += 16;
+    if (flickerTimer % 300 < 16) {
+      ctx.fillStyle = `rgba(139,0,0,${0.05 + Math.random()*0.05})`;
+      ctx.fillRect(0,0,C.width,C.height);
+    }
+  }
+}
+
+// ============================================================
+//  TITLE / INTRO / CHARACTER CREATION
+// ============================================================
+const introLines = [
+  'Es gibt Orte, die auf keiner Karte verzeichnet sind.',
+  'Nicht weil sie vergessen wurden.',
+  'Sondern weil jemand dafuer gesorgt hat.',
+  '',
+  'Du wirst gleich an einem solchen Ort ankommen.',
+  'Die Leute dort werden freundlich sein.',
+  'Sie werden laecheln.',
+  '',
+  'Glaub ihnen nicht.',
+];
+
+function startIntro() {
+  showStep('step-intro');
+  const el = document.getElementById('intro-lines');
+  el.innerHTML = '';
+  let i = 0;
+  const iv = setInterval(() => {
+    if (i >= introLines.length) {
+      clearInterval(iv);
+      setTimeout(() => {
+        el.innerHTML += '<br><span class="red">Glaub dir selbst auch nicht.</span>';
+        setTimeout(() => showStep('step-name'), 3000);
+      }, 1500);
+      return;
+    }
+    if (introLines[i] === '') el.innerHTML += '<br>';
+    else el.innerHTML += introLines[i] + '<br>';
+    i++;
+  }, 1200);
+}
+
+function showStep(id) {
+  document.querySelectorAll('#overlay .step').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function submitName() {
+  const name = document.getElementById('name-input').value.trim();
+  if (!name) return;
+  GS.name = name;
+  showStep('step-origin');
+}
+
+function pickOrigin(o) {
+  GS.origin = o;
+  if (o === 'journalist') { GS.attrs.per++; GS.attrs.int++; GS.ptsLeft -= 2; }
+  if (o === 'relative') { GS.attrs.emp++; GS.ptsLeft -= 1; }
+  updateAttrDisplay();
+  showStep('step-trauma');
+}
+
+function pickTrauma(t) {
+  GS.trauma = t;
+  if (t === 'accident') GS.guilt += 10;
+  showStep('step-attrs');
+  updateAttrDisplay();
+}
+
+function attrChange(attr, delta) {
+  const cur = GS.attrs[attr];
+  if (delta > 0 && GS.ptsLeft <= 0) return;
+  if (delta > 0 && cur >= 5) return;
+  if (delta < 0 && cur <= 1) return;
+  GS.attrs[attr] += delta;
+  GS.ptsLeft -= delta;
+  updateAttrDisplay();
+}
+
+function updateAttrDisplay() {
+  document.getElementById('pts-left').textContent = 'Verbleibend: ' + GS.ptsLeft;
+  document.getElementById('a-wil').textContent = GS.attrs.wil;
+  document.getElementById('a-emp').textContent = GS.attrs.emp;
+  document.getElementById('a-per').textContent = GS.attrs.per;
+  document.getElementById('a-agg').textContent = GS.attrs.agg;
+  document.getElementById('a-int').textContent = GS.attrs.int;
+}
+
+function startGame() {
+  const ov = document.getElementById('overlay');
+  ov.classList.add('hidden');
+  setTimeout(() => ov.style.display = 'none', 1000);
+  GS.phase = 'playing';
+  updateHUD();
+
+  // Arrival dialogue after a moment
+  setTimeout(() => {
+    dlgQueue = [];
+    queueLine('', 'Du stehst am Ortseingang von Hollowmere. Spaeter Nachmittag.', 'thought');
+    queueLine('', 'Warmes Licht. Vogelgesang. Alte Haeuser, Blumengaerten. Wie aus einem Bilderbuch.', 'thought');
+    queueLine('', 'Erkunde den Ort. Sprich mit den Leuten. [WASD] Bewegen, [LEERTASTE] Interagieren.');
+    dlgQueue.shift()();
+  }, 1500);
+}
+
+// ============================================================
+//  START
+// ============================================================
+updateAttrDisplay();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
