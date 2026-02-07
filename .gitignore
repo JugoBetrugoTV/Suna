@@ -3,3 +3,9 @@ __pycache__/
 *.pyo
 python_portable/
 python_portable.zip
+_python_dl.zip
+_get_pip.py
+dist/
+build/
+*.spec
+*.exe
